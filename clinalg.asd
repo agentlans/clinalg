@@ -6,4 +6,5 @@
     :depends-on ("cffi" "trivial-garbage")
     :serial t
     :components ((:file "array")
-                 (:file "print")))
+                 (:file "print")
+                 (:file "slice")))

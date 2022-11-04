@@ -32,6 +32,12 @@
    :vref
    :mref
    :fill-with
+   ;; Slices
+   :copy
+   :vector-slice
+   :matrix-row
+   :matrix-col
+   :matrix-slice
    ;; Properties
    :size
    :stride
