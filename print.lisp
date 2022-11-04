@@ -1,12 +1,27 @@
+(load "array.lisp")
 (in-package :clinalg)
 
 (defun number->string (x)
-  "Prints number to 4 decimal places in normal or scientific notation."
-  (let ((ax (abs x)))
-    (if (and (not (= ax 0))
-	     (or (< ax 1e-4) (> ax 1e4)))
-	(format nil "~,4E" x)
-	(format nil "~,4F" x))))
+  "String indicating the base 10 number 
+to 4 decimal places in normal or scientific notation."
+  (cond ((integerp x) (format nil "~A" x))
+	((complexp x)
+	 ;; Complex number
+	 (let ((re (realpart x))
+	       (im (imagpart x)))
+	   (format nil "~A~A~Ai"
+		   (number->string re)
+		   (if (>= im 0) "+" "-")
+		   (number->string (abs im)))))
+	((numberp x)
+	 ;; Real number
+	 (let ((ax (abs x)))
+	   (if (and (not (= ax 0))
+		    (or (< ax 1e-4) (> ax 1e4)))
+	       (format nil "~,4E" x)
+	       (format nil "~,4F" x))))
+	;; All other data types
+	(t (format nil "~A" x))))
 
 (defun spaces (n)
   "Returns a string composed of n spaces."
@@ -91,4 +106,3 @@ specified width."
     (format stream "Full storage matrix of type ~A (size ~A x ~A)~%" 
        (num-type obj) (rows obj) (cols obj))
     (pretty-print-matrix stream obj)))
-

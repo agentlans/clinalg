@@ -1,3 +1,6 @@
+(ql:quickload 'cffi)
+(ql:quickload 'trivial-garbage)
+
 ;; Copyright 2022 Alan Tseng
 ;; 
 ;; This file is part of clinalg.
@@ -19,6 +22,9 @@
   (:use :cl
    :cffi :trivial-garbage)
   (:export
+   ;; Complex types
+   :complex-float
+   :complex-double
    ;; Classes
    :num-vector
    :full-matrix
@@ -48,12 +54,38 @@
     (:long . integer)
     (:long-long . integer)))
 
+(defun complex-type? (type)
+  (member type '(:complex-float :complex-double)))
+
+(defun real-type (type)
+  (case type
+    (:complex-float :float)
+    (:complex-double :double)
+    (t type)))
+
+(defun data-n (type n)
+  "Number of elements needed to allocate n numbers of the given type."
+  (if (complex-type? type)
+      (* 2 n)
+      n))
+
 (defun cast-to-cffi-type (x cffi-type)
   "Cast x into a Lisp type that can work with CFFI's type system."
   (let ((type (cdr (assoc cffi-type *cffi-lisp-types*))))
-    (if type
-	(coerce x type)
-	x)))
+    (cond (type (coerce x type))
+	  ((complex-type? cffi-type) (error "Complex type"))
+	  (t x))))
+
+(defun foreign-calloc (type n)
+  "Returns a garbage-collectable pointer of n elements
+  of given type initialized to 0."
+  (let ((p (foreign-alloc (real-type type)
+			  :count (if (complex-type? type)
+				     (* 2 n)
+				     n)
+			  :initial-element
+			  (cast-to-cffi-type 0 (real-type type)))))
+    (finalize p (lambda () (foreign-free p)))))
 
 (defclass num-vector ()
   ((ptr :initarg :ptr)
@@ -91,13 +123,6 @@
   (with-slots (offset ld) m
     (+ offset (* i ld) j)))
 
-(defun foreign-calloc (type n)
-  "Returns a garbage-collectable pointer of n elements
-  of given type initialized to 0."
-  (let ((p (foreign-alloc type :count n
-			       :initial-element (cast-to-cffi-type 0 type))))
-    (finalize p (lambda () (foreign-free p)))))
-
 (defun make-vector (n &optional (type :double))
   "Returns a vector of length n with the specified type.
 Elements are uninitialized."
@@ -125,8 +150,9 @@ Elements are uninitialized."
 
 (defun pointer (obj)
   "Returns pointer to the first element of the array."
-  (with-slots (ptr offset) obj
-    (inc-pointer ptr offset)))
+  (with-slots (ptr offset type) obj
+    (inc-pointer ptr (* offset
+			(if (complex-type? type) 2 1)))))
 
 (defun between? (x bound)
   (and (<= 0 x) (< x bound)))
@@ -150,31 +176,58 @@ Elements are uninitialized."
   (unless (matrix-in-bounds? m i j)
     (error "Subscripts out of bounds.")))
 
+(defun memref (ptr type i)
+  "Returns p[i] where p's elements have the specified type."
+  (macrolet ((ref (i) `(mem-aref ptr (real-type type) ,i)))
+    (if (complex-type? type)
+	;; Get the real and imaginary parts
+	(let ((re (ref (* 2 i)))
+	      (im (ref (+ (* 2 i) 1))))
+	  (complex re im))
+	;; Just a regular real type
+	(ref i))))
+
+;; (cast-to-cffi-type 0.0 (real-type :complex-double))
+
+(defun (setf memref) (z ptr type i)
+  "Sets p[i] = z."
+  (macrolet ((ref (i) `(mem-aref ptr (real-type type) ,i)))
+    (if (complex-type? type)
+	;; Set complex number
+	(let ((typ (real-type type)))
+	  (setf (ref (* 2 i))
+		(cast-to-cffi-type (realpart z) typ))
+	  (setf (ref (+ (* 2 i) 1))
+		(cast-to-cffi-type (imagpart z) typ))
+	  z) ; return the complex number
+	;; Real number
+	(setf (ref i) (cast-to-cffi-type z type)))))
+
 (defmethod vref ((v num-vector) i)
   "Returns v[i]."
   (check-vector-in-bounds v i)
   (with-slots (ptr type) v
-    (mem-aref ptr type (vector-index v i))))
+    (memref ptr type (vector-index v i))))
 
 (defmethod (setf vref) (new-val (v num-vector) i)
   "Sets v[i] = new_val."
   (check-vector-in-bounds v i)
   (with-slots (ptr type) v
-    (setf (mem-aref ptr type (vector-index v i))
-	  (cast-to-cffi-type new-val type))))
+    (setf (memref ptr type (vector-index v i))
+	  new-val)))
 
 (defmethod mref ((m full-matrix) i j)
   "Returns the element at m[i,j]."
   (check-matrix-in-bounds m i j)
   (with-slots (ptr type) m
-    (mem-aref ptr type (matrix-index m i j))))
+    (memref ptr type (matrix-index m i j))))
 
 (defmethod (setf mref) (new-val (m full-matrix) i j)
   "Sets m[i,j] = new_val."
   (check-matrix-in-bounds m i j)
   (with-slots (ptr type) m
-    (setf (mem-aref ptr type (matrix-index m i j))
-	  (cast-to-cffi-type new-val type))))
+    (setf (memref ptr type (matrix-index m i j))
+	  new-val)))
 
 ;; Sets obj[i] = f(i) for i = 0..size(obj)
 (defmethod fill-with (f (obj num-vector))
