@@ -1,4 +1,3 @@
-(load "array.lisp")
 (in-package :clinalg)
 
 (defun number->string (x)

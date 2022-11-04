@@ -1,6 +1,3 @@
-(ql:quickload 'cffi)
-(ql:quickload 'trivial-garbage)
-
 ;; Copyright 2022 Alan Tseng
 ;; 
 ;; This file is part of clinalg.
