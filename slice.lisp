@@ -57,12 +57,13 @@
   "Returns m[[start_row:end_row), [start_col:end_col)]."
   (check-matrix-in-bounds m start-row start-col)
   (check-matrix-in-bounds m end-row end-col)
+  (assert (>= end-row start-row))
+  (assert (>= end-col start-col))
   (with-slots (ptr type ld) m
     (make-instance 'full-matrix
-		   :rows (abs (- end-row start-row))
-		   :cols (abs (- end-col start-col))
-		   :ld (* ld (if (>= end-row start-row)
-				 1 -1))
+		   :rows (- end-row start-row)
+		   :cols (- end-col start-col)
+		   :ld ld
 		   :type type
 		   :offset (matrix-index m start-row start-col)
 		   :ptr ptr)))

@@ -19,7 +19,8 @@
   (vector-slice v 4 1))
 
 ;; Example of slicing a row from a matrix
-(defparameter *foo* (make-matrix 3 15))
+(defparameter *foo* (make-matrix 3 15 :complex-double))
 (fill-with (lambda (i j) (+ i j)) *foo*)
 (matrix-row *foo* 2)
-
+;; Slice submatrix
+(matrix-slice *foo* 0 2 4 7)
